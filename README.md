@@ -87,7 +87,6 @@ You also need to have your OpenAI API key set as an environment variable:
 ```bash
 export OPENAI_API_KEY='your-api-key'
 ```
-<<<<<<< HEAD
 
 ---
 
