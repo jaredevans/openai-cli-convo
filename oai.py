@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
 """
-oai.py — Prompt → OpenAI Responses API → print text (GPT-5 Mini default)
-- REPL until /quit or Ctrl-C (one-shot if stdin is piped or --one-shot).
-- Keeps ONLY user turns in history; no prior assistant content is sent.
-- Maintains a running compressed summary injected as a system message.
-- Optional streaming; escalates max_output_tokens on "max_output_tokens".
+oai.py — REPL using Responses API with server-side convo via previous_response_id
+
+Behavior:
+- REPL until /quit or Ctrl-C (one-shot if piped or --one-shot).
+- Server-side conversation only: tracked by previous_response_id.
+- Two blank lines before each "You:".
+- No "Assistant:" prefix.
+- /reset starts fresh conversation (clears previous_response_id).
+
+Flags:
+  --model NAME
+  --budgets "A,B,..." (default "768,1536")
+  --instructions TEXT
+  --stream
+  --one-shot/--oneshot
+  --debug
 """
 
-import os, sys, json, time, argparse
-from typing import Optional, List, Tuple, Union
+import os, sys, time, argparse
+from typing import Optional, List, Union, Tuple
 from openai import OpenAI
 
 DEFAULT_MODEL = "gpt-5-mini"
-DEFAULT_HISTORY_TURNS = 10
-DEFAULT_SUMMARY_MAX_CHARS = 1200
-DEFAULT_SUMMARY_EVERY = 1  # summarize after every exchange
 
-# ----------------- Utilities -----------------
+# ----------------- Helpers -----------------
 
 def _resp_to_dict(resp):
     for attr in ("to_dict", "model_dump"):
@@ -28,10 +36,12 @@ def _resp_to_dict(resp):
     return {}
 
 def _extract_text(resp) -> Optional[str]:
+    # Fast path (new SDKs)
     txt = getattr(resp, "output_text", None)
     if isinstance(txt, str) and txt.strip():
         return txt.strip()
 
+    # Responses API shapes
     data = _resp_to_dict(resp) or {}
     outputs = data.get("output") or data.get("outputs") or []
     for item in outputs:
@@ -45,11 +55,15 @@ def _extract_text(resp) -> Optional[str]:
                         t2 = mc["text"].strip()
                         if t2:
                             return t2
+
+    # Sometimes present as {"text":{"value": "..."}}
     tnode = data.get("text")
     if isinstance(tnode, dict):
         tval = tnode.get("value")
         if isinstance(tval, str) and tval.strip():
             return tval.strip()
+
+    # Very old fallback (chat.completions-like)
     choices = data.get("choices")
     if isinstance(choices, list) and choices:
         msg = (((choices[0] or {}).get("message") or {}).get("content") or "")
@@ -58,6 +72,7 @@ def _extract_text(resp) -> Optional[str]:
     return None
 
 def _responses_create(client: OpenAI, **kwargs):
+    """Call responses.create; if 'text' unsupported by this SDK, retry without it."""
     try:
         return client.responses.create(**kwargs)
     except TypeError:
@@ -67,368 +82,220 @@ def _responses_create(client: OpenAI, **kwargs):
             return client.responses.create(**kwargs2)
         raise
 
-def read_prompt() -> str:
+def read_prompt():
     if not sys.stdin.isatty():
-        text = sys.stdin.read().strip()
-        if text:
-            return text
+        txt = sys.stdin.read().strip()
+        if txt:
+            return txt
     try:
         return input("Enter your prompt: ").strip()
     except EOFError:
         return ""
 
-# ----------------- Prompt Builders -----------------
+# ----------------- Core request -----------------
 
-def build_messages_only_users(
-    user_history: List[str],
-    current_user: str,
-    instructions: Optional[str],
-    running_summary: Optional[str],
-    max_pairs: int,
-):
-    msgs: List[dict] = []
-    sys_lines = []
-    if instructions:
-        sys_lines.append(instructions)
-    if running_summary:
-        sys_lines.append(f"\nConversation summary so far (for context only, do not repeat verbatim):\n{running_summary}")
-    if sys_lines:
-        msgs.append({"role": "system", "content": "\n".join(sys_lines)})
-
-    for u in user_history[-max_pairs:]:
-        msgs.append({"role": "user", "content": u})
-    msgs.append({"role": "user", "content": current_user})
-    return msgs
-
-# ----------------- Core Call -----------------
-
-def call_openai_with_escalation(
-    input_payload: Union[str, List[dict]],
-    *,
+def call_and_handle(
+    client: OpenAI,
     model: str,
     budgets: List[int],
     debug: bool,
-    pass_instructions: Optional[str] = None,
-) -> Optional[str]:
+    messages_or_text: Union[str, list],
+    prev_id: Optional[str],
+    stream: bool,
+) -> Tuple[str, Optional[str]]:
     """
-    input_payload: either a plain string or a messages[] list.
-    If you already embedded instructions in messages, leave pass_instructions=None.
+    Makes a request (stream or non-stream), returns (assistant_text, new_response_id).
+    Uses previous_response_id to continue server-side conversation.
     """
-    if not os.getenv("OPENAI_API_KEY"):
-        if debug:
-            sys.stderr.write("[debug] OPENAI_API_KEY is not set\n")
-        return None
-
-    client = OpenAI()
-    last_reason = None
+    last_error = None
 
     for max_out in budgets:
-        if debug:
-            plen = len(input_payload) if isinstance(input_payload, str) else sum(len(m.get("content","")) for m in input_payload)
-            sys.stderr.write(
-                "\n[debug] OpenAI request (responses.create)\n"
-                f"  model: {model}\n"
-                f"  max_output_tokens: {max_out}\n"
-                f"  prompt length: {plen} chars\n"
-                "  reasoning.effort: low\n"
-                "  text.verbosity: low\n"
-                f"  instructions: {bool(pass_instructions)}\n"
-            )
-
+        # Build kwargs once per attempt
         kwargs = dict(
             model=model,
-            input=input_payload,
+            input=messages_or_text,
             max_output_tokens=max_out,
             reasoning={"effort": "low"},
             tool_choice="none",
             text={"verbosity": "low"},
         )
-        if pass_instructions:
-            kwargs["instructions"] = pass_instructions
-
-        try:
-            resp = _responses_create(client, **kwargs)
-        except Exception as e:
-            if debug:
-                sys.stderr.write(f"[debug] responses.create exception: {e}\n")
-            continue
-
-        data = _resp_to_dict(resp) or {}
-        status = data.get("status")
-        reason = (data.get("incomplete_details") or {}).get("reason")
-        usage = data.get("usage") or {}
-        out_tok = usage.get("output_tokens", 0)
-        r_tokens = (usage.get("output_tokens_details") or {}).get("reasoning_tokens", 0)
+        if prev_id:
+            kwargs["previous_response_id"] = prev_id
 
         if debug:
+            plen = len(messages_or_text) if isinstance(messages_or_text, str) \
+                   else sum(len(m.get("content","")) for m in messages_or_text)
             sys.stderr.write(
-                f"[debug] status={status} reason={reason} "
-                f"output_tokens={out_tok} reasoning_tokens={r_tokens}\n"
+                "\n[debug] request (responses"
+                f"{'.stream' if stream else '.create'})\n"
+                f"  model: {model}\n"
+                f"  max_output_tokens: {max_out}\n"
+                f"  prompt length (chars): {plen}\n"
+                f"  previous_response_id: {prev_id}\n"
             )
 
-        text = _extract_text(resp)
-        if text:
-            return " ".join(text.split())
+        try:
+            if stream:
+                # Use the streaming context manager so we can capture the final response id
+                new_id = None
+                chunks: List[str] = []
+                with client.responses.stream(**kwargs) as stream_obj:
+                    for event in stream_obj:
+                        # Print tokens live
+                        if event.type == "response.output_text.delta":
+                            print(event.delta, end="", flush=True)
+                            chunks.append(event.delta)
+                        # Capture id at the end
+                        elif event.type == "response.completed":
+                            # event.response.id should be present
+                            try:
+                                new_id = event.response.id  # SDK object
+                            except Exception:
+                                # Fallback if different shape
+                                ev = getattr(event, "response", None)
+                                if isinstance(ev, dict):
+                                    new_id = ev.get("id")
 
-        last_reason = reason
-        if not (status == "incomplete" and reason == "max_output_tokens"):
-            break
+                    # Ensure a newline after stream
+                    print()
 
-        time.sleep(0.1)
+                # If not captured above, try last-resort extraction
+                if new_id is None:
+                    try:
+                        final = stream_obj.get_final_response()
+                        new_id = getattr(final, "id", None) or (_resp_to_dict(final) or {}).get("id")
+                    except Exception:
+                        pass
 
-    if debug and last_reason:
-        sys.stderr.write(f"[debug] Gave up after escalations; last reason={last_reason}\n")
-    return None
+                return ("".join(chunks).strip(), new_id)
 
-# ----------------- Summary Maintenance -----------------
+            else:
+                resp_obj = _responses_create(client, **kwargs)
+                new_id = getattr(resp_obj, "id", None) or (_resp_to_dict(resp_obj) or {}).get("id")
+                text = _extract_text(resp_obj) or ""
+                # Detect incomplete due to max tokens and escalate
+                data = _resp_to_dict(resp_obj) or {}
+                status = data.get("status")
+                reason = (data.get("incomplete_details") or {}).get("reason")
+                if status == "incomplete" and reason == "max_output_tokens":
+                    # Escalate to next budget
+                    last_error = "max_output_tokens"
+                    time.sleep(0.05)
+                    continue
+                return (text, new_id)
 
-def update_running_summary(
-    *,
-    model: str,
-    budgets: List[int],
-    debug: bool,
-    prior_summary: str,
-    last_user: str,
-    last_assistant: str,
-    max_chars: int,
-) -> str:
-    """
-    Compress prior_summary + last exchange into a shorter summary ≤ max_chars.
-    """
-    prompt = [
-        {"role": "system", "content": (
-            "You maintain a terse running conversation summary for downstream turns.\n"
-            f"Keep it ≤ {max_chars} characters. Use short sentences or bullets.\n"
-            "Preserve key decisions, constraints, variables, IDs, URLs, and instructions.\n"
-            "Drop filler, pleasantries, or redundant phrasing."
-        )},
-        {"role": "user", "content": (
-            "Prior summary:\n"
-            f"{prior_summary or '(none)'}\n\n"
-            "New exchange:\n"
-            f"User: {last_user}\n"
-            f"Assistant: {last_assistant}\n\n"
-            "Return the updated summary only."
-        )}
-    ]
-    new_sum = call_openai_with_escalation(
-        prompt,
-        model=model,
-        budgets=budgets[:1],  # tiny call
-        debug=debug,
-        pass_instructions=None,  # already in system message
-    )
-    if not new_sum:
-        # Fallback: naive local truncation
-        merged = (prior_summary + " " if prior_summary else "") + f"User asked: {last_user} | Ans: {last_assistant}"
-        return (merged[:max_chars]).strip()
-    # Hard cap to avoid growth if model exceeds target slightly
-    if len(new_sum) > max_chars:
-        new_sum = new_sum[:max_chars].rstrip()
-    return new_sum
+        except Exception as e:
+            last_error = str(e)
+            if debug:
+                sys.stderr.write(f"[debug] exception: {e}\n")
+            time.sleep(0.1)
+
+    if debug and last_error:
+        sys.stderr.write(f"[debug] giving up; last error: {last_error}\n")
+    return ("", None)
 
 # ----------------- REPL -----------------
 
-def run_repl(
-    model: str,
-    budgets: List[int],
-    instructions: Optional[str],
-    debug: bool,
-    stream: bool,
-    max_pairs: int,
-    autosummary: bool,
-    summary_every: int,
-    summary_max_chars: int,
-):
+def run_repl(model, budgets, instructions, debug, stream):
     if not os.getenv("OPENAI_API_KEY"):
-        print("ERROR: OPENAI_API_KEY is not set.", file=sys.stderr)
+        print("API key not found.", file=sys.stderr)
         sys.exit(1)
 
     client = OpenAI()
-    user_history: List[str] = []
-    running_summary: str = ""
-    exchanges = 0
+    prev_id: Optional[str] = None
 
     # Startup help
     print("oai REPL started.")
-    print("Type your message. Special commands:")
-    print("  /quit  → exit the session")
-    print("  /reset → clear conversation history and summary\n")
+    print("Special commands:")
+    print("  /quit  → exit")
+    print("  /reset → fresh conversation (server-side)\n")
 
     try:
         while True:
-            try:
-                # Two newlines before each "You:"
-                user = input("\nYou: ").strip()
-            except EOFError:
-                print()
-                break
-
+            # Two blank lines before prompt
+            user = input("\n\nYou: ").strip()
             if not user:
                 continue
             low = user.lower()
             if low in ("/quit", "/exit"):
                 break
             if low == "/reset":
-                user_history.clear()
-                running_summary = ""
-                exchanges = 0
-                print("(history & summary cleared)")
+                prev_id = None
+                print("(conversation reset)")
                 continue
 
-            messages = build_messages_only_users(
-                user_history=user_history,
-                current_user=user,
-                instructions=instructions,
-                running_summary=running_summary,
-                max_pairs=max_pairs,
+            # Build minimal messages for this turn
+            messages = []
+            if instructions:
+                messages.append({"role": "system", "content": instructions})
+            messages.append({"role": "user", "content": user})
+
+            # Send
+            assistant_text, new_id = call_and_handle(
+                client=client,
+                model=model,
+                budgets=budgets,
+                debug=debug,
+                messages_or_text=messages,
+                prev_id=prev_id,
+                stream=stream,
             )
 
-            if stream:
-                kwargs = dict(
-                    model=model,
-                    input=messages,
-                    max_output_tokens=budgets[-1],
-                    reasoning={"effort": "low"},
-                    tool_choice="none",
-                    text={"verbosity": "low"},
-                )
-                if debug:
-                    plen = sum(len(m.get("content","")) for m in messages)
-                    sys.stderr.write(
-                        "\n[debug] OpenAI request (responses.stream)\n"
-                        f"  model: {model}\n"
-                        f"  max_output_tokens: {budgets[-1]}\n"
-                        f"  prompt length (chars): {plen}\n"
-                    )
-                assistant_chunks: List[str] = []
-                try:
-                    with client.responses.stream(**kwargs) as stream_obj:
-                        for event in stream_obj:
-                            if event.type == "response.output_text.delta":
-                                chunk = event.delta
-                                assistant_chunks.append(chunk)
-                                print(chunk, end="", flush=True)
-                        print()
-                except KeyboardInterrupt:
-                    print("\n(^C) stream interrupted")
-                    break
-                assistant_full = "".join(assistant_chunks).strip()
-            else:
-                assistant_full = call_openai_with_escalation(
-                    messages,
-                    model=model,
-                    budgets=budgets,
-                    debug=debug,
-                    pass_instructions=None,
-                ) or ""
-                print(assistant_full)
+            # Print reply (no "Assistant:" prefix)
+            if not stream:
+               print(assistant_text)
 
-            # Update local state
-            user_history.append(user)
-            exchanges += 1
-
-            # Always show message before updating summary
-            if autosummary and assistant_full and (exchanges % summary_every == 0 or summary_every == 1):
-                print("\n(Updating conversation history and summary, please wait...)", flush=True)
-                running_summary = update_running_summary(
-                    model=model,
-                    budgets=[min(budgets)],
-                    debug=debug,
-                    prior_summary=running_summary,
-                    last_user=user,
-                    last_assistant=assistant_full,
-                    max_chars=summary_max_chars,
-                )
+            # Chain the conversation server-side
+            if new_id:
+                prev_id = new_id
 
     except KeyboardInterrupt:
-        print("\n(^C) exiting REPL")
-
-
+        print("\n(^C) exiting session")
 
 # ----------------- CLI -----------------
 
 def main():
-    ap = argparse.ArgumentParser(description="Prompt OpenAI (GPT-5 Mini) and print the response.")
-    ap.add_argument("--model", default=DEFAULT_MODEL, help="Override model (default: gpt-5-mini)")
-    ap.add_argument("--budgets", default="768,1536", help="Comma-separated max_output_tokens attempts")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument("--budgets", default="768,1536")
     ap.add_argument("--instructions",
-                    default="Answer directly without asking follow-up questions. If details are missing, make reasonable assumptions and state them briefly.",
-                    help="System-style instructions to steer behavior.")
+                    default="Answer directly without asking follow-up questions. If details are missing, make reasonable assumptions and state them briefly.")
+    ap.add_argument("--stream", action="store_true")
+    ap.add_argument("--one-shot", "--oneshot", dest="one_shot", action="store_true")
     ap.add_argument("--debug", action="store_true")
-    ap.add_argument("--stream", action="store_true", help="Stream assistant tokens in real time")
-    ap.add_argument("--history", type=int, default=DEFAULT_HISTORY_TURNS,
-                    help=f"Number of prior user turns to keep (default: {DEFAULT_HISTORY_TURNS})")
-    ap.add_argument("--one-shot", "--oneshot", dest="one_shot", action="store_true",
-                    help="Force one-shot mode even if stdin is a TTY")
-    ap.add_argument("--no-autosummary", dest="autosummary", action="store_false",
-                    help="Disable running summary updates")
-    ap.add_argument("--summary-every", type=int, default=DEFAULT_SUMMARY_EVERY,
-                    help=f"Summarize every N exchanges (default: {DEFAULT_SUMMARY_EVERY})")
-    ap.add_argument("--summary-max-chars", type=int, default=DEFAULT_SUMMARY_MAX_CHARS,
-                    help=f"Maximum characters for the running summary (default: {DEFAULT_SUMMARY_MAX_CHARS})")
     args = ap.parse_args()
 
     budgets = [int(x) for x in args.budgets.split(",") if x.strip().isdigit()] or [768, 1536]
 
-    # One-shot mode if piped or explicitly requested
+    # One-shot mode (piped input or explicit flag)
     if args.one_shot or not sys.stdin.isatty():
         prompt = read_prompt()
         if not prompt:
-            print("No prompt provided.")
-            raise SystemExit(1)
-
-        # Build messages with empty history but include system+summary
-        messages = build_messages_only_users(
-            user_history=[],
-            current_user=prompt,
-            instructions=args.instructions,
-            running_summary="",  # none in one-shot
-            max_pairs=0,
-        )
-
-        if args.stream:
-            client = OpenAI()
-            kwargs = dict(
-                model=args.model,
-                input=messages,
-                max_output_tokens=budgets[-1],
-                reasoning={"effort": "low"},
-                tool_choice="none",
-                text={"verbosity": "low"},
-            )
-            with client.responses.stream(**kwargs) as stream:
-                for event in stream:
-                    if event.type == "response.output_text.delta":
-                        print(event.delta, end="", flush=True)
-                print()
-            return
-
-        text = call_openai_with_escalation(
-            messages,
+            print("No prompt given.")
+            sys.exit(1)
+        client = OpenAI()
+        prev_id = None
+        messages = []
+        if args.instructions:
+            messages.append({"role": "system", "content": args.instructions})
+        messages.append({"role": "user", "content": prompt})
+        text, _ = call_and_handle(
+            client=client,
             model=args.model,
             budgets=budgets,
             debug=args.debug,
-            pass_instructions=None,  # already included in system message
+            messages_or_text=messages,
+            prev_id=prev_id,
+            stream=args.stream,
         )
-        if text:
+
+        if not args.stream:
             print(text)
-            return
-        print("[no text returned]")
-        raise SystemExit(2)
+
+        return
 
     # REPL mode
-    run_repl(
-        model=args.model,
-        budgets=budgets,
-        instructions=args.instructions,
-        debug=args.debug,
-        stream=args.stream,
-        max_pairs=args.history,
-        autosummary=args.autosummary,
-        summary_every=max(1, args.summary_every),
-        summary_max_chars=max(200, args.summary_max_chars),
-    )
+    run_repl(args.model, budgets, args.instructions, args.debug, args.stream)
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

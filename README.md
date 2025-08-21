@@ -1,22 +1,24 @@
-# oai.py - OpenAI Command-Line Interface
+# oai.py
 
-A Python script for interacting with the OpenAI API from the command line. It supports both interactive (REPL) and one-shot modes.
+`oai.py` is a Python script that provides a command-line interface (CLI) for interacting with the OpenAI API. It functions as a REPL (Read-Eval-Print Loop), allowing for continuous conversation with an AI model.
 
 ## Features
 
-- **Interactive REPL:** Engage in a conversation with the model.
-- **One-Shot Mode:** Pipe input directly to the script for a single response.
-- **Conversation History:** Maintains a history of user turns to provide context.
-- **Running Summary:** Keeps a compressed summary of the conversation to stay within token limits.
-- **Streaming:** Get real-time responses from the model.
-- **Token Escalation:** Automatically increases the `max_output_tokens` on subsequent retries if the previous attempt failed due to token limits.
+- **REPL Interface**: Engages in a continuous conversation until you exit.
+- **Server-Side Conversations**: Keeps track of the conversation context on the server-side.
+- **Command-Line Flags**: Customize the model, budget, and other settings.
+- **Streaming Support**: Can stream responses from the API for faster interaction.
+- **One-Shot Mode**: Can be used for single queries, especially useful when piping input.
+
+<img src="https://i.imgur.com/dZN2JSf.png">
 
 <img src="https://i.imgur.com/F3NOq2a.png">
 
 ## Usage
 
-### Prerequisites
+To start the REPL, run the script from your terminal:
 
+<<<<<<< HEAD
 - Python 3
 - An OpenAI API key set as an environment variable: `export OPENAI_API_KEY='your-key'`
 
@@ -33,45 +35,61 @@ uv run python oai.py --stream
 # pip
 ```
 pip install -r requirements.txt
+=======
+```bash
+>>>>>>> e16e21f (server-side conversations to keep track of previous messages in convo.)
 python oai.py
 ```
 
-### Interactive (REPL) Mode
+You can then type your prompts and press Enter. To exit, type `/quit` or use `Ctrl-C`.
 
-To start the REPL, run the script without any arguments:
+### Special Commands
 
-```bash
-uv run python oai.py --stream
-```
-
-You can then type your prompts and get responses. The following commands are available:
-
-- `/quit`: Exit the session.
-- `/reset`: Clear the conversation history and summary.
+- `/quit`: Exit the REPL.
+- `/reset`: Start a new conversation, clearing the previous context.
 
 ### One-Shot Mode
 
-You can pipe content to the script or use the `--one-shot` flag for a single interaction.
+For single interactions, you can use the `--one-shot` flag or pipe input to the script.
 
-```bash
-echo "What is the capital of France?" | uv run python oai.py
-```
+**Using the flag:**
 
 ```bash
 uv run python oai.py --one-shot "What is the capital of France?"
 ```
 
+**Piping input:**
+
+```bash
+echo "What is the capital of France?" | uv run python oai.py
+```
+
 ## Options
 
-| Option                | Description                                                                      | Default                                                               |
-| --------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `--model`             | The model to use for the conversation.                                           | `gpt-5-mini`                                                          |
-| `--budgets`           | Comma-separated `max_output_tokens` attempts.                                    | `768,1536`                                                            |
-| `--instructions`      | System-style instructions to steer the model's behavior.                         | "Answer directly without asking follow-up questions..."               |
-| `--debug`             | Enable debug mode to see more verbose output.                                    | `False`                                                               |
-| `--stream`            | Stream assistant tokens in real time.                                            | `False`                                                               |
-| `--history`           | Number of prior user turns to keep in the history.                               | `10`                                                                  |
-| `--one-shot`          | Force one-shot mode even if stdin is a TTY.                                      | `False`                                                               |
-| `--no-autosummary`    | Disable running summary updates.                                                 | `False`                                                               |
-| `--summary-every`     | Summarize every N exchanges.                                                     | `1`                                                                   |
-| `--summary-max-chars` | Maximum characters for the running summary.                                      | `1200`                                                                |
+The script supports several command-line arguments to customize its behavior:
+
+- `--model NAME`: Specify the model to use (default: `gpt-5-mini`).
+- `--budgets "A,B,..."`: A comma-separated list of response token budgets to try (default: `"768,1536"`).
+- `--instructions TEXT`: Provide system instructions for the AI.
+- `--stream`: Enable streaming for the response.
+- `--one-shot` or `--oneshot`: Use the script for a single interaction.
+- `--debug`: Enable debug output to stderr.
+
+## Requirements
+
+- Python 3
+- `openai` library
+
+You can install the required library using pip:
+
+```bash
+uv sync 
+  -or- 
+pip install openai
+```
+
+You also need to have your OpenAI API key set as an environment variable:
+
+```bash
+export OPENAI_API_KEY='your-api-key'
+```
