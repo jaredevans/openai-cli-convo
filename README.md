@@ -16,14 +16,12 @@
 
 To start the REPL, run the script from your terminal:
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 - Python 3
 - An OpenAI API key set as an environment variable: `export OPENAI_API_KEY='your-key'`
 
 ### Installation
 
-1.  Clone the repository or download the `oai.py` script.
+1.  Clone the repository 
 2.  Install the required dependencies:
 
 # uv (preferred)
@@ -34,13 +32,7 @@ uv run python oai.py --stream
 # pip
 ```
 pip install -r requirements.txt
-=======
-```bash
->>>>>>> e16e21f (server-side conversations to keep track of previous messages in convo.)
-=======
-```bash
->>>>>>> e16e21f (server-side conversations to keep track of previous messages in convo.)
-python oai.py
+python oai.py --stream
 ```
 
 You can then type your prompts and press Enter. To exit, type `/quit` or use `Ctrl-C`.
@@ -138,5 +130,3 @@ The script can be configured using the following environment variables:
 - `LMSTUDIO_KEEP_TURNS`: Number of recent turns to keep in full detail (default: `8`).
 - `LMSTUDIO_MAX_CONTEXT_CHARS`: Character limit to trigger compression (default: `12000`).
 - `LMSTUDIO_SUMMARY_WORDS`: Target word count for the summary (default: `120`).
-=======
->>>>>>> e16e21f (server-side conversations to keep track of previous messages in convo.)
