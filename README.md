@@ -11,6 +11,8 @@ A Python script for interacting with the OpenAI API from the command line. It su
 - **Streaming:** Get real-time responses from the model.
 - **Token Escalation:** Automatically increases the `max_output_tokens` on subsequent retries if the previous attempt failed due to token limits.
 
+<img src="https://i.imgur.com/F3NOq2a.png">
+
 ## Usage
 
 ### Prerequisites
