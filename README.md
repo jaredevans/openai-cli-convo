@@ -102,6 +102,8 @@ export OPENAI_API_KEY='your-api-key'
 - **REPL Interface**: For continuous conversation.
 - **Configurable**: Key parameters can be configured via environment variables.
 
+<img src ="https://i.imgur.com/GS7mvRr.png">
+
 ### Usage
 
 To start the REPL, run the script from your terminal:
