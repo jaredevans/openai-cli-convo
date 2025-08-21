@@ -25,13 +25,23 @@ A Python script for interacting with the OpenAI API from the command line. It su
     ```bash
     pip install -r requirements.txt
     ```
+# uv (preferred)
+```
+uv sync
+uv run python oai.py --stream
+```
+# pip
+```
+pip install -r requirements.txt
+python oai.py
+```
 
 ### Interactive (REPL) Mode
 
 To start the REPL, run the script without any arguments:
 
 ```bash
-./oai.py
+uv run python oai.py --stream
 ```
 
 You can then type your prompts and get responses. The following commands are available:
@@ -44,11 +54,11 @@ You can then type your prompts and get responses. The following commands are ava
 You can pipe content to the script or use the `--one-shot` flag for a single interaction.
 
 ```bash
-echo "What is the capital of France?" | ./oai.py
+echo "What is the capital of France?" | uv run python oai.py
 ```
 
 ```bash
-./oai.py --one-shot "What is the capital of France?"
+uv run python oai.py --one-shot "What is the capital of France?"
 ```
 
 ## Options
