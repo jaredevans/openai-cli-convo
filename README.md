@@ -22,9 +22,7 @@ A Python script for interacting with the OpenAI API from the command line. It su
 
 1.  Clone the repository or download the `oai.py` script.
 2.  Install the required dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
+
 # uv (preferred)
 ```
 uv sync
