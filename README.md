@@ -84,7 +84,7 @@ export OPENAI_API_KEY='your-api-key'
 
 ## endpoint-oai.py
 
-`endpoint-oai.py` is a Python script that provides a REPL (Read-Eval-Print Loop) for chatting with any OpenAI-compatible API endpoint, such as [LM Studio](https://lmstudio.ai/). It's designed for continuous conversation with session-only memory management, automatically compressing old messages into a running summary to avoid exceeding the context window. It also includes a `/check` command to verify the last AI response using the official OpenAI API. Useful when you're prompting to a smaller, less capable AI model.
+`endpoint-oai.py` is a Python script that provides a REPL (Read-Eval-Print Loop) for chatting with any OpenAI-compatible API endpoint, such as [LM Studio](https://lmstudio.ai/). It's designed for continuous conversation with session-only memory management, automatically compressing old messages into a running summary to avoid exceeding the context window. It also includes a `/check` command to verify the last AI response using the official OpenAI API. Useful when you're prompting to smaller, less capable AI models.
 
 ### Features
 
