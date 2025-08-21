@@ -44,15 +44,7 @@ You can then type your prompts and press Enter. To exit, type `/quit` or use `Ct
 
 ### One-Shot Mode
 
-For single interactions, you can use the `--one-shot` flag or pipe input to the script.
-
-**Using the flag:**
-
-```bash
-uv run python oai.py --one-shot "What is the capital of France?"
-```
-
-**Piping input:**
+For single interactions, you can use the pipe input to the script.
 
 ```bash
 echo "What is the capital of France?" | uv run python oai.py
