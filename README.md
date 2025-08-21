@@ -12,8 +12,6 @@
 
 <img src="https://i.imgur.com/dZN2JSf.png">
 
-<img src="https://i.imgur.com/F3NOq2a.png">
-
 ## Usage
 
 To start the REPL, run the script from your terminal:
@@ -93,3 +91,45 @@ You also need to have your OpenAI API key set as an environment variable:
 ```bash
 export OPENAI_API_KEY='your-api-key'
 ```
+
+---
+
+## endpoint-oai.py
+
+`endpoint-oai.py` is a Python script that provides a REPL (Read-Eval-Print Loop) for chatting with any OpenAI-compatible API endpoint, such as [LM Studio](https://lmstudio.ai/). It's designed for continuous conversation with session-only memory management, automatically compressing old messages into a running summary to avoid exceeding the context window.
+
+### Features
+
+- **OpenAI-Compatible Endpoint**: Connects to any service that provides a `/v1/chat/completions` endpoint.
+- **Automatic Context Compression**: When the conversation gets long, it automatically summarizes the oldest parts of the dialogue, allowing for very long conversations.
+- **REPL Interface**: For continuous conversation.
+- **Configurable**: Key parameters like the endpoint URL, model name, and context size can be configured via environment variables.
+
+### Usage
+
+To start the REPL, run the script from your terminal:
+
+```bash
+python endpoint-oai.py
+```
+
+### Special Commands
+
+- `/quit` or `/exit`: Exit the REPL.
+- `/reset`: Clear the conversation history.
+- `/model <name>`: Switch to a different model.
+- `/system <text>`: Change the base system prompt.
+- `/summary`: View the current compressed summary of the conversation.
+- `/summarize`: Force an update of the conversation summary.
+- `/help`: Show the list of available commands.
+
+### Configuration
+
+The script can be configured using the following environment variables:
+
+- `LMSTUDIO_BASE_URL`: The base URL of the endpoint (default: `http://127.0.0.1:11435/v1`).
+- `LMSTUDIO_MODEL`: The default model name to use.
+- `LMSTUDIO_API_KEY`: The API key if required (default: `not-needed`).
+- `LMSTUDIO_KEEP_TURNS`: Number of recent turns to keep in full detail (default: `8`).
+- `LMSTUDIO_MAX_CONTEXT_CHARS`: Character limit to trigger compression (default: `12000`).
+- `LMSTUDIO_SUMMARY_WORDS`: Target word count for the summary (default: `120`).
