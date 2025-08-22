@@ -35,7 +35,13 @@ pip install -r requirements.txt
 python oai.py --stream
 ```
 
+# Conversations
+
 You can then type your prompts and press Enter. To exit, type `/quit` or use `Ctrl-C`.
+
+You will be in a conversation with looping prompting with memorized history of previous prompts and responses.
+
+`/reset` to clear out the history and start a new conversation.
 
 ### Special Commands
 
