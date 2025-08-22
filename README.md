@@ -65,7 +65,7 @@ The capital of France is Paris.
 
 The script supports several command-line arguments to customize its behavior:
 
-- `--model NAME`: Specify the model to use (default: `gpt-5-mini`).
+- `--model NAME`: Specify the reasoning model to use (default: `gpt-5-mini`).
 - `--system TEXT`: Provide system instructions for the AI. (default: "Answer directly and concisely.").
 - `--budgets "A,B,..."`: A comma-separated list of response token budgets to try (default: `"800,1600"`).
 - `--effort CHOICE`: The effort level for the model, from "low", "medium", or "high" (default: "medium").
