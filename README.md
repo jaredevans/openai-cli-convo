@@ -66,11 +66,11 @@ The capital of France is Paris.
 The script supports several command-line arguments to customize its behavior:
 
 - `--model NAME`: Specify the model to use (default: `gpt-5-mini`).
-- `--budgets "A,B,..."`: A comma-separated list of response token budgets to try (default: `"768,1536"`).
-- `--instructions TEXT`: Provide system instructions for the AI.
+- `--system TEXT`: Provide system instructions for the AI. (default: "Answer directly and concisely.").
+- `--budgets "A,B,..."`: A comma-separated list of response token budgets to try (default: `"800,1600"`).
+- `--effort CHOICE`: The effort level for the model, from "low", "medium", or "high" (default: "medium").
 - `--stream`: Enable streaming for the response.
-- `--one-shot` or `--oneshot`: Use the script for a single interaction.
-- `--debug`: Enable debug output to stderr.
+- `--one-shot`: Use the script for a single interaction.
 
 ## Requirements
 
