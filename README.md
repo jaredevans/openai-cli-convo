@@ -8,7 +8,7 @@
 - **Server-Side Conversations**: Keeps track of the conversation context on the server-side.
 - **Command-Line Flags**: Customize the model, budget, and other settings.
 - **Streaming Support**: Can stream responses from the API for faster interaction.
-- **One-Shot Mode**: Can be used for single queries, especially useful when piping input.
+- **One-Shot Mode**: Used for single query then exit immediately.
 
 <img src="https://i.imgur.com/dZN2JSf.png">
 
@@ -48,6 +48,11 @@ For single interactions, you can use the pipe input to the script.
 
 ```bash
 echo "What is the capital of France?" | uv run python oai.py
+The capital of France is Paris.
+
+% uv run python oai.py --one-shot
+Enter your prompt: What is the capital of France?
+The capital of France is Paris.
 ```
 
 ## Options
