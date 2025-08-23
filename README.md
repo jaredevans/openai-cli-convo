@@ -1,6 +1,6 @@
 # oai.py
 
-`oai.py` is a python script that provides a command-line interface (CLI) for interacting with *reasoning* GPTS via the OpenAI API. It functions as a REPL (Read-Eval-Print Loop), allowing for continuous conversation with an AI model.
+`oai.py` is a python script that provides a command-line interface (CLI) for interacting with *reasoning* GPTs via the OpenAI API. It functions as a REPL (Read-Eval-Print Loop), allowing for continuous conversation with an AI model.
 
 ## Features
 
