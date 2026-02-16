@@ -4,7 +4,7 @@
 
 ## Features
 
-- **REPL Interface**: Engages in a continuous conversation until you exit.
+- **REPL Interface**:  Engages in a continuous conversation until you exit.
 - **Server-Side Conversations**: Keeps track of the conversation context on the server-side.
 - **Command-Line Flags**: Customize the model, budget, and other settings.
 - **Streaming Support**: Can stream responses from the API for faster interaction.
@@ -21,7 +21,7 @@ To start the REPL, run the script from your terminal:
 
 ### Installation
 
-1.  Clone the repository 
+1.  Clone the repository
 2.  Install the required dependencies:
 
 # uv (preferred)
@@ -80,8 +80,8 @@ The script supports several command-line arguments to customize its behavior:
 You can install the required library using pip:
 
 ```bash
-uv sync 
-  -or- 
+uv sync
+  -or-
 pip install openai
 ```
 
